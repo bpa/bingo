@@ -1,61 +1,36 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
-	"os"
+	"math/rand"
+	"slices"
 )
 
 var pages int
-var output = flag.String("o", "bingo.pdf", "Output file")
-var bingo_tiles []tile
+
+// var _output = flag.String("o", "bingo.pdf", "Output file")
+
+func init() {
+	flag.IntVar(&pages, "p", 0, "Pages to generate")
+	// flag.IntVar(&pages, "pages", 25, "Pages to generate")
+}
 
 func main() {
-	flag.IntVar(&pages, "p", 20, "Pages to generate")
-	flag.IntVar(&pages, "pages", 20, "Pages to generate")
 	flag.Parse()
+	knownRand := rand.New(rand.NewSource(0))
 	tiles := discover(flag.Args())
-	fmt.Println(tiles)
-}
-
-func discover(paths []string) []tile {
-	tiles := make([]tile, 0)
-	if len(paths) > 0 {
-		find(paths[0], &tiles)
-	} else {
-		find("tiles", &tiles)
+	freeIdx := slices.IndexFunc(tiles, func(t tile) bool { return t.label == "Free" })
+	free := tiles[freeIdx]
+	tiles[freeIdx] = tiles[0]
+	tiles = tiles[1:]
+	columns := buildColumns(tiles, knownRand)
+	fmt.Println(pages)
+	for i := range pages {
+		fmt.Println("Page", i)
+		card1 := generateCard(i*2, columns, &free)
+		card2 := generateCard(i*2+1, columns, &free)
+		render(i, card1, card2)
 	}
-	return tiles
-}
-
-func find(path string, tiles *[]tile) {
-	s, err := os.Stat(path)
-	if err != nil {
-		println(err.Error())
-		os.Exit(1)
-	}
-	if s.IsDir() {
-		fs.WalkDir(os.DirFS(path), path, func(path string, d fs.DirEntry, err error) error {
-			if tile, err := newTile(d); err == nil {
-				*tiles = append(*tiles, tile)
-			}
-			return nil
-		})
-	} else {
-		*tiles = append(*tiles, tile{"", path})
-	}
-}
-
-type tile struct {
-	image string
-	label string
-}
-
-func newTile(d fs.DirEntry) (tile, error) {
-	if d.Type().IsRegular() {
-		return tile{"", d.Name()}, nil
-	}
-	return tile{}, errors.New("Unhandled type")
+	printCallSheet(tiles)
 }
